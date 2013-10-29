@@ -11,3 +11,12 @@
 *.lai
 *.la
 *.a
+
+### Specific for development
+*~
+*bck
+*.swp
+*target*
+build/
+.DS_Store
+.AppleDouble
