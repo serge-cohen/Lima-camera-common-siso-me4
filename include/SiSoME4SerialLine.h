@@ -83,7 +83,7 @@ namespace lima
 
       virtual void getNbAvailBytes(int &avail);
 
-/* These one should be provided by the super-class :
+/* These one should be provided by the super-class, based on read and write :
       virtual void writeRead( const std::string& writebuffer,
                              std::string& readbuffer, int max_len,
                              bool wr_no_wait=false,
