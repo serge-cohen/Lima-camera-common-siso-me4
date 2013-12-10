@@ -120,14 +120,15 @@ namespace lima
       template <class T>
       int getParameter(const int i_param_id, T *o_value) const;
       
-      void setWidth(unsigned int i_val);
-      void getWitdh(unsigned int &o_val) const;
-      void setHeight(unsigned int i_val);
-      void getHeight(unsigned int &o_val) const;
-      void setDeviceTimeout(unsigned int i_val);
-      void getDeviceTimeout(unsigned int &o_val) const;
+      void setWidth(uint32_t i_val);
+      void getWitdh(uint32_t &o_val) const;
+      void setHeight(uint32_t i_val);
+      void getHeight(uint32_t &o_val) const;
+      void setDeviceTimeout(uint32_t i_val);
+      void getDeviceTimeout(uint32_t &o_val) const;
       void setPixelFormat(siso_px_format i_val);
       void getPixelFormat(siso_px_format &o_val) const;
+      void getBytePerPixel(size_t &o_val) const;
       
       
     protected:
@@ -171,6 +172,7 @@ namespace lima
       // -- Members
       // LIMA / Acquisition (thread) related :
       SoftBufferCtrlObj						m_buffer_ctrl_obj;
+      dma_mem											*m_next_dma_head;
       // Pure thread and signals :
       AcqThread*                	m_acq_thread;						// The thread retieving frame buffers from the SDK
       Cond                        m_cond;									// Waiting condition for inter thread signaling
