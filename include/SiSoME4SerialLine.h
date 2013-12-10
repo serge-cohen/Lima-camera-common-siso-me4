@@ -51,6 +51,7 @@ namespace lima
     class SerialLine : lima::HwSerialLine {
       DEB_CLASS_NAMESPC(DebModCamera, "SerialLine", "siso-me4");
 
+    public:
       enum ME4_baud_rate {
         BR9600   = CL_BAUDRATE_9600,
         BR19200  = CL_BAUDRATE_19200,
@@ -67,6 +68,7 @@ namespace lima
         On  = 1
       };
       
+    public:
       SerialLine(unsigned int i_serial_index, ME4_baud_rate i_baud_rate, ME4_parity i_parity,
                  const std::string& i_line_term="\r", double i_timeout=1.0,
                  int i_block_size=0, double i_block_delay=0);
@@ -117,9 +119,11 @@ namespace lima
       virtual void getBaudRate(ME4_baud_rate &o_baud_rate) const;
       virtual void setParity(ME4_parity i_parity);
       virtual void getParity(ME4_parity &o_parity) const;
+      
+      // Making sure the settings are taken into account :
+      virtual void init();
     protected:
       virtual int checkError(int i_err_code) const;
-      virtual void init();
       
     private:
       void						*m_serial_ref;
