@@ -220,6 +220,12 @@ lima::siso_me4::Grabber::prepareAcq()
   the_buffer.allocBuffers(the_alloc_frames, 1, the_frame_dim);
   int				the_frame_mem_size = the_frame_dim.getMemSize();
   
+  if ( the_frame_mem_size != the_image_size ) {
+    DEB_WARNING() << "You most likely hit an error condition where the a priori computed memory size of a frame ("
+    << the_image_size << "B) is different from the memory allocated by lima StdBufferCbMgr ("
+    << the_frame_mem_size << "B).";
+  }
+  
   // Handing the frame buffers to the SDK :
   if ( m_next_dma_head ) {
     // As proposed by the SDK, we make sure that we start from an empty queue :
@@ -278,6 +284,7 @@ lima::siso_me4::Grabber::startAcq()
   }
   
 //  // Later on, should handle Software (Software_multi) triggering ...
+//  // This is done through one of the functions Fg_sendSoftwareTrigger Fg_sendSoftwareTriggerEx
 //  if ( Software == m_trig_mode ) {
 //    // If we are in software trigger mode, the call to startAcq serves as the trigger :
 //    sendCommand(andor3::SoftwareTrigger);
@@ -297,6 +304,20 @@ lima::siso_me4::Grabber::stopAcq()
 {
   DEB_MEMBER_FUNCT();
   doStopAcq(false);
+}
+
+FgParamTypes
+lima::siso_me4::Grabber::getParamterType(const int i_param_id) const
+{
+  DEB_MEMBER_FUNCT();
+  FieldParameterAccess the_access;
+  the_access.p_uint32_t = NULL;
+  the_access.count = 0;
+  
+  if ( sisoError(Fg_getParameterWithType(m_fg, i_param_id, &the_access, m_dma_index, FG_PARAM_TYPE_STRUCT_FIELDPARAMACCESS)) ) {
+    DEB_WARNING() << "Problem with getting a parameter within a FieldParameterAccess to get the parameter type";
+  }
+  return the_access.vtype;
 }
 
 
@@ -472,7 +493,14 @@ lima::siso_me4::Grabber::doStopAcq(bool iImmediate)
 void
 lima::siso_me4::Grabber::setStatus(Grabber::Status iStatus, bool iForce)
 {
-  
+  DEB_MEMBER_FUNCT();
+  DEB_TRACE() << "in _setStatus, about to ask for the lock to mutex";
+  AutoMutex aLock(m_cond.mutex());
+  DEB_TRACE() << "grabbed the lock";
+  if( iForce || (Grabber::Fault != m_status) )
+    m_status = iStatus;
+  m_cond.broadcast();
+  DEB_TRACE() << "_setStatus broadcasting and releasing soon the mutex lock.";
 }
 
 
@@ -510,5 +538,6 @@ lima::siso_me4::Grabber::AcqThread::~AcqThread()
 void
 lima::siso_me4::Grabber::AcqThread::threadFunction()
 {
+
 }
 

@@ -46,6 +46,14 @@
 // siso_me4 plugin headers :
 #include "SiSoME4SerialLine.h"
 
+/* To get extra information about parameters,
+ the best would be to getParameterWithType wiath a type of 
+ FG_PARAM_TYPE_STRUCT_FIELDPARAMACCESS
+ and then go exploring the FieldParameterAccess which contains pretty much
+ all useful information !!!
+ In particular the native type in FgParamTypes.
+ */
+
 namespace lima
 {
   namespace siso_me4
@@ -65,6 +73,7 @@ namespace lima
 
       //! The status of the grabber
       enum Status { Ready, Running, Fault };
+      // Using directly the FgParamTypes instead !
 //      enum siso_type {
 //        siso_type_invalid = FG_PARAM_TYPE_INVALID,
 //        siso_type_int32 = FG_PARAM_TYPE_INT32_T,
@@ -115,6 +124,7 @@ namespace lima
       void stopAcq();
       
     public:  // Accessing the parameters known from the frame-grabber :
+      FgParamTypes getParamterType(const int i_param_id) const;
       template <class T>
       int setParameter(const int i_param_id, T i_value);
       template <class T>
