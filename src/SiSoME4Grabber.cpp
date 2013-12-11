@@ -247,21 +247,56 @@ lima::siso_me4::Grabber::prepareAcq()
   // #warning Setting properly the continuous vs. fixed acquisition mode of the camera
 
   // No other specific settings should be done to tell the grabber if we are in
-  // free-running or fixed number of frame mode.
+  // free-running or fixed number of frame mode (or so it seems).
 }
 
 
-// Launches the SDK's acquisition and the m_acq_thread to retrieve frame buffers as they are ready
+/*!
+ @brief Launching an acquisition sequence, including the frame retrieving thread.
+ 
+ This method is called at the launch of the acquisition sequence, after the
+ prepareAcq method but before any frame can be shot.
+ 
+ This method is responsible to perform the following actions :
+ * Tell the SDK to launch the acquisition sequence
+ * Signal to the m_acq_thread that it should resume running
+ because some frames will soon be available to retrieve
+ */
 void
 lima::siso_me4::Grabber::startAcq()
 {
-#warning SHOULD implement that later
+  DEB_MEMBER_FUNCT();
+  
+  DEB_TRACE() << "Starting the acquisition by the camera (or triggering when in software trigger mode)";
+  
+  if ( 0 == m_image_index ) {
+    // Setting the start timestamp of the buffer :
+    m_buffer_ctrl_obj.getBuffer().setStartTimestamp(Timestamp::now());
+    // Sending the start command to the SDK, depending of video mode (infinite) or not (known in advance number of frames).
+    frameindex_t		the_nr_grab = (0 != m_nb_frames_to_collect) ?  m_nb_frames_to_collect : GRAB_INFINITE;
+    sisoError(Fg_AcquireEx(m_fg, m_dma_index, the_nr_grab, ACQ_STANDARD, m_next_dma_head));
+  }
+  
+//  // Later on, should handle Software (Software_multi) triggering ...
+//  if ( Software == m_trig_mode ) {
+//    // If we are in software trigger mode, the call to startAcq serves as the trigger :
+//    sendCommand(andor3::SoftwareTrigger);
+//  }
+  
+  DEB_TRACE() << "Resuming the action of the acquisition thread";
+  AutoMutex    the_lock(m_cond.mutex());
+  m_acq_thread_waiting = false;
+  m_cond.broadcast();
+  
+  DEB_TRACE() << "Done, the acquisition is now started and the frame retrieving should take place in parallel in a second thread";
 }
+
 // Stops the acquisition, as soon as the m_acq_thread is retrieving frame buffers.
 void
 lima::siso_me4::Grabber::stopAcq()
 {
-#warning SHOULD implement that later
+  DEB_MEMBER_FUNCT();
+  doStopAcq(false);
 }
 
 
