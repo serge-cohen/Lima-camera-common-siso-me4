@@ -572,8 +572,6 @@ lima::siso_me4::Grabber::AcqThread::threadFunction()
     unsigned int		the_wait_timeout = 10;
 
     while ( the_acq_goon && ((0 == m_grabber.m_nb_frames_to_collect) || (m_grabber.m_nb_frames_to_collect != m_grabber.m_image_index)) ) {
-      unsigned char  		*the_returned_image;
-      int								the_returned_image_size;
 #warning This setting might be problematic for cameras accepting (and used with) exposure time larger than a bit less than 10s !
       frameindex_t			the_new_frame;
       
@@ -602,6 +600,8 @@ lima::siso_me4::Grabber::AcqThread::threadFunction()
         bool              the_frame_read;
         
         // I guess that the acq_frame_nb should rather be the frame number in the ring buffer (if it is one) rather the index in the complete acquisition ???
+        // It  might be better to use the "the_new_frame" instead, really corresponding to the buffer within the set of buffers.
+#warning Potential bug here : maybe it is : the_frame_info.acq_frame_nb = the_new_frame - 1 .
         the_frame_info.acq_frame_nb = static_cast<int>(m_grabber.m_image_index);
         the_frame_read = the_buffer.newFrameReady(the_frame_info);
         DEB_TRACE() << "[siso_me4 acquisition thread] image " << m_grabber.m_image_index <<" published with newFrameReady(), with result " << the_frame_read ;

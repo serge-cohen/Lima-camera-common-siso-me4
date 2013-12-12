@@ -129,6 +129,10 @@ namespace lima
       int setParameter(const int i_param_id, T i_value);
       template <class T>
       int getParameter(const int i_param_id, T *o_value) const;
+      template <class T>
+      int setParameterNamed(const std::string& i_param_name, T i_value, int * o_param_id=NULL);
+      template <class T>
+      int getParameterNamed(const std::string& i_param_name, T *o_value, int * o_param_id=NULL) const;
       
       void setWidth(uint32_t i_val);
       void getWitdh(uint32_t &o_val) const;
@@ -217,6 +221,25 @@ namespace lima
       if ( m_fg ) {
         return sisoError(Fg_getParameterWithType(m_fg, i_param_id, o_value, m_dma_index));
       }
+    }
+
+    template <class T>
+    int
+    Grabber::setParameterNamed(const std::string& i_param_name, T i_value, int * o_param_id)
+    {
+      int the_id = Fg_getParameterIdByName(m_fg, i_param_name.c_str());
+      if ( o_param_id )
+        *o_param_id = the_id;
+      return setParameter(the_id, i_value);
+    }
+    template <class T>
+    int
+    Grabber::getParameterNamed(const std::string& i_param_name, T *o_value, int * o_param_id) const
+    {
+      int the_id = Fg_getParameterIdByName(m_fg, i_param_name.c_str());
+      if ( o_param_id )
+        *o_param_id = the_id;
+      return getParameter(the_id, o_value);
     }
 
     
