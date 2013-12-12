@@ -84,6 +84,7 @@ m_status(Ready)
 
 lima::siso_me4::Grabber::~Grabber()
 {
+  DEB_DESTRUCTOR();
   // Forcing the stop of the acquisition :
   if ( m_acq_thread ) {
     doStopAcq(true);
@@ -115,13 +116,17 @@ lima::siso_me4::Grabber::sisoError(int code) const
 size_t
 lima::siso_me4::Grabber::getNumberFrame() const
 {
+  DEB_MEMBER_FUNCT();
   return m_nb_frames_to_collect;
 }
 
 void
 lima::siso_me4::Grabber::setNumberFrame(size_t i_nb_frames)
 {
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(i_nb_frames);
   m_nb_frames_to_collect = i_nb_frames;
+  DEB_TRACE() << "Setting the number of frames to collect to " << m_nb_frames_to_collect;
 }
 
 /*!
@@ -311,6 +316,13 @@ lima::siso_me4::Grabber::stopAcq()
 {
   DEB_MEMBER_FUNCT();
   doStopAcq(false);
+}
+
+lima::HwBufferCtrlObj*
+lima::siso_me4::Grabber::getBufferCtrlObj()
+{
+  DEB_MEMBER_FUNCT();
+  return &m_buffer_ctrl_obj;
 }
 
 FgParamTypes
@@ -612,9 +624,6 @@ lima::siso_me4::Grabber::AcqThread::threadFunction()
         HwFrameInfoType		the_frame_info;
         bool              the_frame_read;
         
-        // I guess that the acq_frame_nb should rather be the frame number in the ring buffer (if it is one) rather the index in the complete acquisition ???
-        // It  might be better to use the "the_new_frame" instead, really corresponding to the buffer within the set of buffers.
-#warning Potential bug here : maybe it is : the_frame_info.acq_frame_nb = the_new_frame - 1 .
         the_frame_info.acq_frame_nb = static_cast<int>(m_grabber.m_image_index);
         the_frame_read = the_buffer.newFrameReady(the_frame_info);
         DEB_TRACE() << "[siso_me4 acquisition thread] image " << m_grabber.m_image_index <<" published with newFrameReady(), with result " << the_frame_read ;
@@ -669,8 +678,8 @@ lima::siso_me4::Grabber::AcqThread::threadFunction()
     Fg_FreeMemHead(m_grabber.m_fg, m_grabber.m_next_dma_head);
     m_grabber.m_next_dma_head = NULL;
     
-    StdBufferCbMgr& the_buffer = m_grabber.m_buffer_ctrl_obj.getBuffer();
-    DEB_TRACE() << "Getting StdBufferCbMgr to allocate the buffers that we want to have";
+//    StdBufferCbMgr& the_buffer = m_grabber.m_buffer_ctrl_obj.getBuffer();
+//    DEB_TRACE() << "Getting StdBufferCbMgr to allocate the buffers that we want to have";
     // Indeed it's better NOT to release as long as not needed (so that we don't have memeory troubles in the use of the frames).
     // So we are commenting this one out, and leave the "release" to take place "transparently" in the prepareAcq since the
     // frame allocation make sure that first the previously used memeory is released.

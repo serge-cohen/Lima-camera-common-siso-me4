@@ -123,6 +123,9 @@ namespace lima
       // Stops the acquisition, as soon as the m_acq_thread is retrieving frame buffers.
       void stopAcq();
       
+      // Getting the buffer control object :
+      HwBufferCtrlObj* getBufferCtrlObj();
+      
     public:  // Accessing the parameters known from the frame-grabber :
       FgParamTypes getParamterType(const int i_param_id) const;
       template <class T>
