@@ -70,7 +70,7 @@ namespace lima
      *******************************************************************/
     class Grabber {
       DEB_CLASS_NAMESPC(DebModCamera, "Grabber", "siso-me4");
-
+    public:
       //! The status of the grabber
       enum Status { Ready, Running, Fault };
       // Using directly the FgParamTypes instead !
@@ -107,7 +107,7 @@ namespace lima
         siso_access_read_write_change = 7
       };
 
-      Grabber(int board_index, int cam_port, const std::string& applet_name, unsigned int dma_index);
+      Grabber(const std::string& i_siso_dir_5, int board_index, int cam_port, const std::string& applet_name, unsigned int dma_index);
       virtual ~Grabber();
       virtual int sisoError(int code) const;
 
@@ -144,6 +144,7 @@ namespace lima
       void getPixelFormat(siso_px_format &o_val) const;
       void getBytePerPixel(size_t &o_val) const;
       
+      SerialLine& getSerialLine();
       
     protected:
       //! Performing all the initialisation code… Ideally an init on the camera (in tango term)

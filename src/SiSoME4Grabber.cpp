@@ -51,7 +51,7 @@ namespace lima {
 
 
 // lima::siso_me4::Grabber::
-lima::siso_me4::Grabber::Grabber(int board_index, int cam_port, const std::string& applet_name, unsigned int dma_index) :
+lima::siso_me4::Grabber::Grabber(const std::string& i_siso_dir_5, int board_index, int cam_port, const std::string& applet_name, unsigned int dma_index) :
 m_applet_filename(applet_name),
 m_board_index(board_index),
 m_cam_port(cam_port),
@@ -72,6 +72,13 @@ m_buffer_ringing(false),
 m_status(Ready)
 {
   DEB_CONSTRUCTOR();
+  if ( ! i_siso_dir_5.empty() ) {
+    setenv("SISODIR5", i_siso_dir_5.c_str(), true);
+  }
+  else {
+    setenv("SISODIR5", "/opt/siso", false);
+  }
+
   init();
 }
 
@@ -422,6 +429,12 @@ lima::siso_me4::Grabber::getBytePerPixel(size_t &o_val) const
       
       break;
   }
+}
+
+lima::siso_me4::SerialLine&
+lima::siso_me4::Grabber::getSerialLine()
+{
+  return *m_serial_line;
 }
 
 

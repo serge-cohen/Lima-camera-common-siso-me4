@@ -48,7 +48,7 @@ namespace lima
      * and tapping on the frame-grabber SDK part that is normalised by camera link
      * standard.
      *******************************************************************/
-    class SerialLine : lima::HwSerialLine {
+    class SerialLine : public lima::HwSerialLine {
       DEB_CLASS_NAMESPC(DebModCamera, "SerialLine", "siso-me4");
 
     public:
