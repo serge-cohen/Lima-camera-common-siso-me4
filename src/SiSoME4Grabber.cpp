@@ -280,14 +280,14 @@ lima::siso_me4::Grabber::startAcq()
     m_buffer_ctrl_obj.getBuffer().setStartTimestamp(Timestamp::now());
     // Sending the start command to the SDK, depending of video mode (infinite) or not (known in advance number of frames).
     frameindex_t		the_nr_grab = (0 != m_nb_frames_to_collect) ?  m_nb_frames_to_collect : GRAB_INFINITE;
-    sisoError(Fg_AcquireEx(m_fg, m_dma_index, the_nr_grab, ACQ_STANDARD, m_next_dma_head));
+    sisoError(Fg_AcquireEx(m_fg, m_dma_index, the_nr_grab, ACQ_BLOCK, m_next_dma_head));
   }
   
 //  // Later on, should handle Software (Software_multi) triggering ...
 //  // This is done through one of the functions Fg_sendSoftwareTrigger Fg_sendSoftwareTriggerEx
 //  if ( Software == m_trig_mode ) {
 //    // If we are in software trigger mode, the call to startAcq serves as the trigger :
-//    sendCommand(andor3::SoftwareTrigger);
+//    sendCommand(siso_me4::SoftwareTrigger);
 //  }
   
   DEB_TRACE() << "Resuming the action of the acquisition thread";
@@ -538,6 +538,135 @@ lima::siso_me4::Grabber::AcqThread::~AcqThread()
 void
 lima::siso_me4::Grabber::AcqThread::threadFunction()
 {
+  DEB_MEMBER_FUNCT();
+  AutoMutex					the_lock(m_grabber.m_cond.mutex());
+  StdBufferCbMgr		&the_buffer = m_grabber.m_buffer_ctrl_obj.getBuffer();
+  
+  while (! m_grabber.m_acq_thread_should_quit ) {
+    DEB_TRACE() << "[siso_me4 acquisition thread] Top of the loop";
+    // We are looping until being «signaled» that we should quit.
+    while ( m_grabber.m_acq_thread_waiting && ! m_grabber.m_acq_thread_should_quit ) {
+      // Lets wait a signal telling that maybe something has to be done …
+      DEB_TRACE() << "[siso_me4 acquisition thread] Setting the m_acq_thread_running to false (since we are waiting)";
+      m_grabber.m_acq_thread_running = false; // Making sure the main class/thread knows nothing goes on
+      m_grabber.m_cond.broadcast();
+      DEB_TRACE() << "[siso_me4 acquisition thread] Waiting acquisition start";
+      m_grabber.m_cond.wait();
+    }
+    // The main thread asked to get out of wait mode (setting m_cam.m_acq_thread_waiting to false)
+    DEB_ALWAYS() << "[siso_me4 acquisition thread] Set running by main thread setting m_cam.m_acq_thread_waiting to false (or m_cam.m_acq_thread_should_quit to true)";
+    m_grabber.m_acq_thread_running = true;
+    
+    if ( m_grabber.m_acq_thread_should_quit ) {
+      // Should return ASAP, so that the thread could be «joined».
+      DEB_TRACE() << "[siso_me4 acquisition thread] Quitting under request from main thread (m_acq_thread_should_quit)";
+      return;
+    }
+    
+    m_grabber.m_status = Grabber::Running;
+    m_grabber.m_cond.broadcast();
+    the_lock.unlock();
+    
+    DEB_TRACE() << "[siso_me4 acquisition thread] About to start looping to get the images-frame retrieved";
+    bool						the_acq_goon = true;
+    unsigned int		the_wait_timeout = 10;
 
+    while ( the_acq_goon && ((0 == m_grabber.m_nb_frames_to_collect) || (m_grabber.m_nb_frames_to_collect != m_grabber.m_image_index)) ) {
+      unsigned char  		*the_returned_image;
+      int								the_returned_image_size;
+#warning This setting might be problematic for cameras accepting (and used with) exposure time larger than a bit less than 10s !
+      frameindex_t			the_new_frame;
+      
+      
+      DEB_ALWAYS() << "[siso_me4 acquisition thread] Waiting for buffer index " << m_grabber.m_image_index << " (Fg_getImageEx)";
+      the_new_frame = Fg_getImageEx(m_grabber.m_fg, SEL_NEXT_IMAGE, 0, m_grabber.m_dma_index, the_wait_timeout, m_grabber.m_next_dma_head);
+      DEB_ALWAYS() << "[siso_me4 acquisition thread] DONE waiting for buffer index " << m_grabber.m_image_index;
+      
+      // Testing if we were asked to stop the acquisition thread :
+      // It is best to do that as soon as returning from the SDK, since otherwise it might block some
+      // thread interacting with the main thread.
+      DEB_TRACE() << "[siso_me4 acquisition thread] Locking to test if we were asked to stop";
+      the_lock.lock();
+      the_acq_goon = !m_grabber.m_acq_thread_waiting && !m_grabber.m_acq_thread_should_quit;
+      m_grabber.m_acq_thread_running = the_acq_goon;
+      DEB_TRACE() << "[siso_me4 acquisition thread] Should we continue at the end of this iteration : " << m_grabber.m_acq_thread_running << " AKA " << the_acq_goon;
+      m_grabber.m_cond.broadcast();
+      DEB_TRACE() << "[siso_me4 acquisition thread] Just broadcasted for other threads to know that it might be interesting to change state";
+      the_lock.unlock();
+      DEB_TRACE() << "[siso_me4 acquisition thread] Just Unlocked after state potential modification";
+
+      if ( 0 < the_new_frame ) { // We indeed got a frame back
+        //  m_grabber.setStatus(Grabber::Running, false);
+        // We managed to get an image buffer returned :
+        HwFrameInfoType		the_frame_info;
+        bool              the_frame_read;
+        
+        // I guess that the acq_frame_nb should rather be the frame number in the ring buffer (if it is one) rather the index in the complete acquisition ???
+        the_frame_info.acq_frame_nb = static_cast<int>(m_grabber.m_image_index);
+        the_frame_read = the_buffer.newFrameReady(the_frame_info);
+        DEB_TRACE() << "[siso_me4 acquisition thread] image " << m_grabber.m_image_index <<" published with newFrameReady(), with result " << the_frame_read ;
+        the_acq_goon = the_acq_goon && the_frame_read;
+        
+        ++m_grabber.m_image_index;
+        
+//        if ( m_cam.m_buffer_ringing ) {
+//          DEB_TRACE() << "[siso_me4 acquisition thread] As we are using a ring-buffer : re-queueing the acquired image on the buffer queue.";
+//          AT_QueueBuffer(m_cam.m_camera_handle, the_returned_image, the_returned_image_size);
+//          DEB_TRACE() << "[siso_me4 acquisition thread] There is NO guarantee that LIMA will be done with this buffer BEFORE andor SDK3 is changing its content !!!";
+//        }
+// In all cases, the buffer will be ringed back in, unless we leave it blocked…
+        if ( m_grabber.m_buffer_ringing ) {
+          // Deblocking the buffer right away, so that it can be used again for another image :
+          Fg_setStatusEx(m_grabber.m_fg, FG_UNBLOCK, the_new_frame, m_grabber.m_dma_index, m_grabber.m_next_dma_head);
+          frameindex_t		the_num_buf_blocked;
+          frameindex_t		the_num_lost_frames;
+          the_num_buf_blocked = Fg_getStatusEx(m_grabber.m_fg, NUMBER_OF_BLOCKED_IMAGES, 0, m_grabber.m_dma_index, m_grabber.m_next_dma_head);
+          the_num_lost_frames = Fg_getStatusEx(m_grabber.m_fg, NUMBER_OF_LOST_IMAGES, 0, m_grabber.m_dma_index, m_grabber.m_next_dma_head);
+          DEB_TRACE() << "[siso_me4 acquisition thread] Ringing : Number of blocked frames is " << the_num_buf_blocked;
+          if ( 0 != the_num_lost_frames ) {
+            DEB_WARNING() << "[siso_me4 acquisition thread] Ringing : Already lost (completely) " << the_num_lost_frames << "images !!!";
+          }
+        }
+      }
+      else if ( FG_TIMEOUT_ERR == the_new_frame ) {
+        DEB_WARNING() << "A timeout occured while waiting for a frame, in the current settings, usage and camera it should not happen. Most likely something is going wrong... But still we will try again to get the frame.";
+      }
+      else {
+        DEB_ERROR() << "[siso_me4 acquisition thread] Problem in retrieving the frame indexed " << m_grabber.m_image_index <<"!\n"
+        << "\tFg_getImageEx returned an error " << the_new_frame << "\n"
+        << "\t" << Fg_getErrorDescription(m_grabber.m_fg, static_cast<int>(the_new_frame)) << "\n"
+        << "\t!!! returning to WAIT mode !!!";
+        m_grabber.m_acq_thread_running = the_acq_goon = false;
+        m_grabber.setStatus(Fault, false);
+        break;
+      }
+      DEB_TRACE() << "[siso_me4 acquisition thread] End of the iteration, next iteration will be for image index " << m_grabber.m_image_index;
+      
+      if ( ! the_acq_goon ) {
+        DEB_TRACE() << "[siso_me4 acquisition thread] In the middle of acquisition, got the request to stop the frame retrieving activity : m_acq_thread_waiting is " << m_grabber.m_acq_thread_waiting << " and m_acq_thread_should_quit is " << m_grabber.m_acq_thread_should_quit;
+      }
+      
+    }
+    
+    // Once we arrived here, we have to purge the memory... Hoping that the last image(s) will not be lost (if not correctly copied).
+    DEB_TRACE() << "[siso_me4 acquisition thread] Finished looping !";
+    Fg_stopAcquireEx(m_grabber.m_fg, m_grabber.m_dma_index, m_grabber.m_next_dma_head, STOP_SYNC);
+    DEB_TRACE() << "[siso_me4 acquisition thread] Sent stop to the frame grabber";
+
+    Fg_FreeMemHead(m_grabber.m_fg, m_grabber.m_next_dma_head);
+    m_grabber.m_next_dma_head = NULL;
+    
+    StdBufferCbMgr& the_buffer = m_grabber.m_buffer_ctrl_obj.getBuffer();
+    DEB_TRACE() << "Getting StdBufferCbMgr to allocate the buffers that we want to have";
+    // Indeed it's better NOT to release as long as not needed (so that we don't have memeory troubles in the use of the frames).
+    // So we are commenting this one out, and leave the "release" to take place "transparently" in the prepareAcq since the
+    // frame allocation make sure that first the previously used memeory is released.
+    //    the_buffer.releaseBuffers();
+
+    m_grabber.setStatus(Ready, false);
+    // Returning to the waiting mode :
+    the_lock.lock();
+    m_grabber.m_acq_thread_waiting = true;
+  }
 }
 
