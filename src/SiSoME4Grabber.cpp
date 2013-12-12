@@ -17,6 +17,7 @@
  */
 
 // System headers :
+#include <limits.h>
 
 // Camera SDK headers :
 

@@ -19,10 +19,14 @@
  * License along with this file. If not, see <http://www.gnu.org/licenses/>.
  */
 
+
+#undef WIN32
+
 #if defined (__GNUC__) && (__GNUC__ == 3) && defined (__ELF__)
 #   define GENAPI_DECL __attribute__((visibility("default")))
 #   define GENAPI_DECL_ABSTRACT __attribute__((visibility("default")))
 #endif
+
 
 // System headers :
 #include <stdlib.h>
@@ -31,16 +35,17 @@
 #include <string>
 #include <vector>
 
+// LImA headers :
+#include "Debug.h"
+#include "HwMaxImageSizeCallback.h"
+#include "HwBufferMgr.h"
+
 // Framegrabber SDK headers :
 #include <fgrab_struct.h>
 #include <fgrab_prototyp.h>
 #include <fgrab_define.h>
 
 
-// LImA headers :
-#include "Debug.h"
-//#include "HwMaxImageSizeCallback.h"
-#include "HwBufferMgr.h"
 
 
 // siso_me4 plugin headers :
