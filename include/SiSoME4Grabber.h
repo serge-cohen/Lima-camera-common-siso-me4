@@ -118,9 +118,11 @@ namespace lima
 
     public:
       // Handling the number of frames to collect:
-      virtual size_t getNumberFrame() const;
-      virtual void setNumberFrame(size_t i_nb_frames);
-
+      virtual frameindex_t getNumberFrame() const;
+      virtual void setNumberFrame(frameindex_t i_nb_frames);
+      virtual frameindex_t getNbHwAcquiredFrames() const;
+      virtual void getStatus(Status &o_status) const;
+      
       // Preparing the camera's SDK to acquire frames
       void prepareAcq();
       // Launches the SDK's acquisition and the m_acq_thread to retrieve frame buffers as they are ready
@@ -198,14 +200,14 @@ namespace lima
       dma_mem											*m_next_dma_head;
       // Pure thread and signals :
       AcqThread*                	m_acq_thread;						// The thread retieving frame buffers from the SDK
-      Cond                        m_cond;									// Waiting condition for inter thread signaling
+      mutable Cond				        m_cond;									// Waiting condition for inter thread signaling
       volatile bool								m_acq_thread_waiting;   // The m_acq_thread is waiting (main uses it to tell it to stop waiting)
       volatile bool								m_acq_thread_running;		// The m_acq_thread is running (main uses it to accept stopAcq)
       volatile bool								m_acq_thread_should_quit; // The main thread signals to m_acq_thread that it should quit.
       
       // A bit more general :
-      size_t											m_nb_frames_to_collect; // The number of frames to collect in current sequence
-      size_t											m_image_index;					// The index in the current sequence of the next image to retrieve
+      frameindex_t								m_nb_frames_to_collect; // The number of frames to collect in current sequence
+      frameindex_t								m_image_index;					// The index in the current sequence of the next image to retrieve
       bool												m_buffer_ringing;				// Should the buffer be considered as a ring buffer rather than a single use buffer.
       Status											m_status;								// The current status of the camera
     };

@@ -114,7 +114,7 @@ lima::siso_me4::Grabber::sisoError(int code) const
 
 // Handling the number of frames to collect:
 
-size_t
+frameindex_t
 lima::siso_me4::Grabber::getNumberFrame() const
 {
   DEB_MEMBER_FUNCT();
@@ -122,13 +122,31 @@ lima::siso_me4::Grabber::getNumberFrame() const
 }
 
 void
-lima::siso_me4::Grabber::setNumberFrame(size_t i_nb_frames)
+lima::siso_me4::Grabber::setNumberFrame(frameindex_t i_nb_frames)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(i_nb_frames);
   m_nb_frames_to_collect = i_nb_frames;
   DEB_TRACE() << "Setting the number of frames to collect to " << m_nb_frames_to_collect;
 }
+
+frameindex_t
+lima::siso_me4::Grabber::getNbHwAcquiredFrames() const
+{
+  DEB_MEMBER_FUNCT();
+  return m_image_index;
+}
+
+
+void
+lima::siso_me4::Grabber::getStatus(Status &o_status) const
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex aLock(m_cond.mutex());
+  o_status = m_status;
+  DEB_RETURN() << DEB_VAR1(DEB_HEX(o_status));
+}
+
 
 /*!
  @brief Preparing the grabber and memory for an acquisition sequence
