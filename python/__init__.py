@@ -50,7 +50,7 @@ __path__.append(mod_path)
 ld_open_flags = sys.getdlopenflags()
 sys.setdlopenflags(ld_open_flags | DLFCN.RTLD_GLOBAL)
 
-from Lima.Andor3.limaandor3 import Andor3 as _A
+from Lima.SiSoME4.limasisome4 import SiSoME4 as _S
 globals().update(_A.__dict__)
 
 sys.setdlopenflags(ld_open_flags)
