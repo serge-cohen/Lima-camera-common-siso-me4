@@ -527,11 +527,61 @@ lima::siso_me4::Grabber::init()
 void
 lima::siso_me4::Grabber::doStopAcq(bool iImmediate)
 {
-#warning Making sure that the acquisition thread stops...
-  if ( m_next_dma_head ) {
-    Fg_FreeMemHead(m_fg, m_next_dma_head);
-    m_next_dma_head = NULL;
+  DEB_MEMBER_FUNCT();
+
+  AutoMutex		the_lock(m_cond.mutex());
+  bool				the_camera_acq;
+
+  if ( iImmediate ) {
+    DEB_TRACE() << "Sending a FORCEFULL acquisition stop, whatever is the current status because you asked for immediate stop";
+    Fg_stopAcquireEx(m_fg, m_dma_index, m_next_dma_head, STOP_ASYNC); // Since immediate was requested perform an ASYNC stop.
+    DEB_TRACE() << "Sent  Fg_stopAcquireEx(STOP_ASYNC) in doStopAcq immediate == TRUE";
+    // Deblocking the acquisition thread (in case it is waiting)
+    m_acq_thread_waiting = true; // Asking to stop as soon as not in charge
+                                 // This is dangerous: causes the lock inside the lock ?
+                                 //    _setStatus(Ready, false);
+    m_status = Ready;
+    // Finally broadcasting :
+    m_cond.broadcast();
+    DEB_TRACE() << "Returning from the FORCEFULL doStopAcq";
+    return;
   }
+  
+  DEB_TRACE() << "Requested a stop, but waiting the opportunity in the acquisition thread";
+  //  if ( the_camera_acq || (Ready != m_status) ) {
+  if ( ! m_acq_thread_waiting ) {
+#warning The current implementation looses the acquired frames that were not transfered yet, in the case of a stopAcq.
+    while ( (! iImmediate) && (m_acq_thread_running) ) { // We are still actively retrieving frame buffers
+                                                         //  the_lock.unlock();
+                                                         //  the_lock.lock();
+      m_acq_thread_waiting = true; // Asking to stop as soon as not in charge
+      m_cond.broadcast();
+      DEB_TRACE() << "Setting ourselves to wait a signal";
+      m_cond.wait();
+      DEB_TRACE() << "We just received a signal that it is usefull to check again if the acquisition thread is in a stoppable state";
+    }
+    DEB_TRACE() << "We finally got the signal that the currently exposed frame is now grabbed... We can go on for the acquisition stop";
+    the_lock.unlock();
+    
+    // If we were not asked for immediate leaving, let the acquisition thread end it :
+    //    if ( ! iImmediate ) {
+    //      return;
+    //    }
+    
+    DEB_TRACE() << "We should now STOP the acquisition";
+    Fg_stopAcquireEx(m_fg, m_dma_index, m_next_dma_head, STOP_ASYNC); // We will not process those buffers anyway...
+    DEB_TRACE() << "Sent a Fg_stopAcquireEx in doStopAcq immediate == FALSE." << "\n\t\tAnd now flushing the buffer queue since no more acquisition is in flight";
+    if ( m_next_dma_head ) {
+      Fg_FreeMemHead(m_fg, m_next_dma_head);
+      m_next_dma_head = NULL;
+    }
+    DEB_TRACE() << "Finally setting the status to Ready";
+    setStatus(Ready, false);
+  }
+  else {
+    DEB_TRACE() << "One more doStopAcq, while the acquisition is either already stopped or about to be stopped... Skip the current one";
+  }
+  return;  
 }
 
 void
