@@ -175,6 +175,7 @@ lima::siso_me4::Grabber::prepareAcq()
   siso_px_format	the_px_format;
   size_t					the_bytes_per_px;
   
+  //  setStatus(Running);
   getWitdh(the_width);
   getHeight(the_height);
   //  getPixelFormat(the_px_format);
@@ -183,13 +184,13 @@ lima::siso_me4::Grabber::prepareAcq()
   // Retrieving useful information from the camera :
   size_t			the_image_size = the_width * the_height * the_bytes_per_px;
   
-  DEB_ALWAYS() << "Getting the basic information from the camera : image size (in bytes) and pixel encoding.";
+  DEB_TRACE() << "Getting the basic information from the camera : image size (in bytes) and pixel encoding.";
   DEB_ALWAYS() << "The image size in bytes is " << the_image_size
   << " (" << the_width << "x" << the_height
   << "), and the pixel encoding index is " << static_cast<uint32_t>(the_px_format)
   << ". Corresponding to " << the_bytes_per_px << "Bytes per pixel";
   
-  DEB_ALWAYS() << "Image size parameters are : width " << the_width
+  DEB_TRACE() << "Image size parameters are : width " << the_width
   << ", height " << the_height
   << " and finaly byte per pixel " << the_bytes_per_px;
   
@@ -208,12 +209,12 @@ lima::siso_me4::Grabber::prepareAcq()
 //       break;
 //     case siso_px_rgb_24b:
 //       the_frame_dim.setImageType(Bpp8);
-//       DEB_ALWAYS() << "You have hit a bug in term of SiSo RGB-24bpp to lima type conversion";
+//       DEB_TRACE() << "You have hit a bug in term of SiSo RGB-24bpp to lima type conversion";
 // #warning SHOULD implement that later
 //       break;
 //     case siso_px_rgb_32b:
 //       the_frame_dim.setImageType(Bpp8);
-//       DEB_ALWAYS() << "You have hit a bug in term of SiSo RGB-32bpp to lima type conversion";
+//       DEB_TRACE() << "You have hit a bug in term of SiSo RGB-32bpp to lima type conversion";
 // #warning SHOULD implement that later
 //       break;
 //     default:
@@ -229,8 +230,10 @@ lima::siso_me4::Grabber::prepareAcq()
   DEB_ALWAYS() << "The number of frames to be collected is set to : " << the_alloc_frames << ", before testing the memory available";
   
   m_buffer_ctrl_obj.setFrameDim(the_frame_dim);
-  m_buffer_ctrl_obj.getMaxNbBuffers(the_max_frames);
-  DEB_ALWAYS() << "Given above parameters, maximum numbe of frames in memory is "
+  //  m_buffer_ctrl_obj.getMaxNbBuffers(the_max_frames);
+  //  the_max_frames = the_max_frames >> 2;
+  the_max_frames = 64;
+  DEB_ALWAYS() << "Given above parameters, maximum number of frames in memory is "
   << the_max_frames;
   if (( the_max_frames < the_alloc_frames ) || ( 0 == m_nb_frames_to_collect )) {
     // If not enough memory or continuous acquisition we go into ring buffer mode :
@@ -267,24 +270,27 @@ lima::siso_me4::Grabber::prepareAcq()
   }
 
   // Preparing the next memory header :
-  DEB_ALWAYS() << "Allocating the DMA memory header";
+  DEB_TRACE() << "Allocating the DMA memory header";
   m_next_dma_head = Fg_AllocMemHead(m_fg, the_image_size * static_cast<size_t>(the_alloc_frames), static_cast<frameindex_t>(the_alloc_frames));
   
   // Then queue all the buffers allocated by StdBufferCbMgr
-  DEB_ALWAYS() << "Pushing all the frame buffers to the frame grabber SDK";
+  DEB_TRACE() << "Pushing all the frame buffers to the frame grabber SDK";
   for ( int i=0; the_alloc_frames != i; ++i) {
     void*		the_buffer_ptr = the_buffer.getFrameBufferPtr(i);
-    std::cout << "About to add to the frame grabber the memory at pointer : " << the_buffer_ptr << " of size " << the_image_size << std::endl;
+    //    std::cout << "About to add to the frame grabber the memory at pointer : " << the_buffer_ptr << " of size " << the_image_size << std::endl;
     int                 the_err_code;
-    if ( 0 > (the_err_code = sisoError(Fg_AddMem(m_fg, the_buffer_ptr, the_image_size, i, m_next_dma_head))) ) {
-      DEB_ALWAYS() << "Unable to push the subbuffer " << i << " to the DMA memory for frame grabbing.\n"
+    if ( 0 > (the_err_code = Fg_AddMem(m_fg, the_buffer_ptr, the_image_size, i, m_next_dma_head)))  {
+      sisoError(the_err_code);
+      DEB_WARNING() << "Unable to push the subbuffer " << i << " to the DMA memory for frame grabbing.\n"
 		    << "Error code is " << the_err_code;
       //      THROW_HW_ERROR(Error) << "Unable to push the subbuffer " << i << " to the DMA memory for frame grabbing.";
     }
     else {
-      DEB_ALWAYS() << "Just accepted the subbuffer index : " << the_err_code << " compared to i : " << i;
+      if ( 0 == (i % 200) ) {
+	DEB_ALWAYS() << "Just accepted the subbuffer index : " << the_err_code << " compared to i : " << i;
+      }
     }
-    DEB_ALWAYS() << "Queueing the frame buffer " << i << " done (should work).";
+    DEB_TRACE() << "Queueing the frame buffer " << i << " done (should work).";
   }
   DEB_ALWAYS() << "Finished queueing " << the_alloc_frames << " frame buffers to andor's SDK3";
   // Seems to me that the «0 == m_nb_frames_to_collect» case corresponds to the continuous case
@@ -319,7 +325,7 @@ lima::siso_me4::Grabber::startAcq()
     m_buffer_ctrl_obj.getBuffer().setStartTimestamp(Timestamp::now());
     // Sending the start command to the SDK, depending of video mode (infinite) or not (known in advance number of frames).
     frameindex_t		the_nr_grab = (0 != m_nb_frames_to_collect) ?  m_nb_frames_to_collect : GRAB_INFINITE;
-    std::cout << "fg : " << m_fg << "\ndma_index : " << m_dma_index << "\ndma_head : " << m_next_dma_head << std::endl;
+    //    std::cout << "fg : " << m_fg << "\ndma_index : " << m_dma_index << "\ndma_head : " << m_next_dma_head << std::endl;
 
     sisoError(Fg_AcquireEx(m_fg, m_dma_index, the_nr_grab, ACQ_BLOCK, m_next_dma_head));
   }
@@ -680,25 +686,26 @@ lima::siso_me4::Grabber::AcqThread::threadFunction()
       frameindex_t			the_new_frame;
       
       
-      DEB_ALWAYS() << "[siso_me4 acquisition thread] Waiting for buffer index " << m_grabber.m_image_index << " (Fg_getImageEx)";
-      std::cout << "[siso_me4 AT] fg : " << m_grabber.m_fg << "\ndma_index : " << m_grabber.m_dma_index << "\ndma_head : " << m_grabber.m_next_dma_head << std::endl;
-      the_new_frame = Fg_getImageEx(m_grabber.m_fg, SEL_ACT_IMAGE, 0, m_grabber.m_dma_index, 20, m_grabber.m_next_dma_head);
-      DEB_ALWAYS() << "[siso_me4 acquisition thread] DONE waiting for buffer index " << m_grabber.m_image_index;
-      
+      DEB_TRACE() << "[siso_me4 acquisition thread] Waiting for buffer index " << m_grabber.m_image_index << " (Fg_getImageEx)";
+      //      std::cout << "[siso_me4 AT] fg : " << m_grabber.m_fg << "\ndma_index : " << m_grabber.m_dma_index << "\ndma_head : " << m_grabber.m_next_dma_head << std::endl;
+      the_new_frame = Fg_getImageEx(m_grabber.m_fg, SEL_NEXT_IMAGE, 0, m_grabber.m_dma_index, 20, m_grabber.m_next_dma_head);
+      if ( 0 == (m_grabber.m_image_index % 50) ) {
+	DEB_ALWAYS() << "[siso_me4 acquisition thread] DONE waiting for buffer index " << m_grabber.m_image_index;
+      }
       // Testing if we were asked to stop the acquisition thread :
       // It is best to do that as soon as returning from the SDK, since otherwise it might block some
       // thread interacting with the main thread.
-      DEB_ALWAYS() << "[siso_me4 acquisition thread] Locking to test if we were asked to stop";
+      DEB_TRACE() << "[siso_me4 acquisition thread] Locking to test if we were asked to stop";
       the_lock.lock();
       the_acq_goon = !m_grabber.m_acq_thread_waiting && !m_grabber.m_acq_thread_should_quit;
       m_grabber.m_acq_thread_running = the_acq_goon;
-      DEB_ALWAYS() << "[siso_me4 acquisition thread] Should we continue at the end of this iteration : " << m_grabber.m_acq_thread_running << " AKA " << the_acq_goon;
+      DEB_TRACE() << "[siso_me4 acquisition thread] Should we continue at the end of this iteration : " << m_grabber.m_acq_thread_running << " AKA " << the_acq_goon;
       m_grabber.m_cond.broadcast();
-      DEB_ALWAYS() << "[siso_me4 acquisition thread] Just broadcasted for other threads to know that it might be interesting to change state";
+      DEB_TRACE() << "[siso_me4 acquisition thread] Just broadcasted for other threads to know that it might be interesting to change state";
       the_lock.unlock();
-      DEB_ALWAYS() << "[siso_me4 acquisition thread] Just Unlocked after state potential modification";
+      DEB_TRACE() << "[siso_me4 acquisition thread] Just Unlocked after state potential modification";
 
-      DEB_ALWAYS() << "[siso_me4 acquisition thread] the_new_frame : " << the_new_frame;
+      DEB_TRACE() << "[siso_me4 acquisition thread] the_new_frame : " << the_new_frame;
       if ( 0 < the_new_frame ) { // We indeed got a frame back
         //  m_grabber.setStatus(Grabber::Running, false);
         // We managed to get an image buffer returned :
@@ -707,7 +714,9 @@ lima::siso_me4::Grabber::AcqThread::threadFunction()
         
         the_frame_info.acq_frame_nb = static_cast<int>(m_grabber.m_image_index);
         the_frame_read = the_buffer.newFrameReady(the_frame_info);
-        DEB_ALWAYS() << "[siso_me4 acquisition thread] image " << m_grabber.m_image_index <<" published with newFrameReady(), with result " << the_frame_read ;
+	if ( 0 == (m_grabber.m_image_index % 50) ) {
+	  DEB_ALWAYS() << "[siso_me4 acquisition thread] image " << m_grabber.m_image_index <<" published with newFrameReady(), with result " << the_frame_read ;
+	}
         the_acq_goon = the_acq_goon && the_frame_read;
         
         ++m_grabber.m_image_index;
@@ -725,7 +734,7 @@ lima::siso_me4::Grabber::AcqThread::threadFunction()
           frameindex_t		the_num_lost_frames;
           the_num_buf_blocked = Fg_getStatusEx(m_grabber.m_fg, NUMBER_OF_BLOCKED_IMAGES, 0, m_grabber.m_dma_index, m_grabber.m_next_dma_head);
           the_num_lost_frames = Fg_getStatusEx(m_grabber.m_fg, NUMBER_OF_LOST_IMAGES, 0, m_grabber.m_dma_index, m_grabber.m_next_dma_head);
-          DEB_ALWAYS() << "[siso_me4 acquisition thread] Ringing : Number of blocked frames is " << the_num_buf_blocked;
+          DEB_TRACE() << "[siso_me4 acquisition thread] Ringing : Number of blocked frames is " << the_num_buf_blocked;
           if ( 0 != the_num_lost_frames ) {
             DEB_WARNING() << "[siso_me4 acquisition thread] Ringing : Already lost (completely) " << the_num_lost_frames << "images !!!";
           }

@@ -21,13 +21,16 @@ siso-me4-objs = SiSoME4Grabber.o SiSoME4SerialLine.o
 
 SRCS = $(siso-me4-objs:.o=.cpp) 
 
-CXXFLAGS += -I../include -I../../../../hardware/include -I../../../../common/include \
-			-I/opt/siso/include \
-			-Wall -pthread -fPIC -g
+CXXFLAGS += \
+	-I../include \
+	-I../../../../hardware/include \
+	-I../../../../common/include \
+	-I/opt/siso/include \
+	-Wall -pthread -fPIC -g
 
-all:	SiSoME4.o
+all: SiSoME4.o
 
-SiSoME4.o:	$(siso-me4-objs)
+SiSoME4.o: $(siso-me4-objs)
 	$(LD) -o $@ -r $+
 
 clean:
@@ -41,3 +44,7 @@ clean:
 	rm -f $*.d
 
 -include $(SRCS:.cpp=.P)
+
+.PHONY: check-syntax
+check-syntax:
+	$(CXX) -Wall -Wextra -fsyntax-only $(CXXFLAGS) $(CHK_SOURCES)
