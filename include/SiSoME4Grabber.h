@@ -59,6 +59,8 @@
  In particular the native type in FgParamTypes.
  */
 
+#define siso_me4_assert(ERR) if (sisoError(ERR)) { DEB_WARNING() << "Error code from " << __func__ << "(" << __FILE__ << "." << __LINE__ << ")."; }
+
 namespace lima
 {
   namespace siso_me4
@@ -218,7 +220,12 @@ namespace lima
     {
       DEB_MEMBER_FUNCT();
       if ( m_fg ) {
-        return sisoError(Fg_setParameterWithType(m_fg, i_param_id, i_value, m_dma_index));
+	int  ret_code = Fg_setParameterWithType(m_fg, i_param_id, i_value, m_dma_index);
+	siso_me4_assert(ret_code);
+	if ( FG_OK != ret_code ) {
+	  DEB_WARNING() << "Unable to set parameter with id " << i_param_id << ", value is : '" << i_value << "'.";
+	}
+	return ret_code;
       }
       DEB_WARNING() << "Tried to set a parameter to a frame-grabber that is not properly initialised";
       return 0;
@@ -230,7 +237,12 @@ namespace lima
     {
       DEB_MEMBER_FUNCT();
       if ( m_fg ) {
-        return sisoError(Fg_getParameterWithType(m_fg, i_param_id, o_value, m_dma_index));
+	int ret_code = Fg_getParameterWithType(m_fg, i_param_id, o_value, m_dma_index);
+	siso_me4_assert(ret_code);
+	if ( FG_OK != ret_code ) {
+	  DEB_WARNING() << "Unable to get parameter with id " << i_param_id << ".";
+	}
+	return ret_code;
       }
     }
 
@@ -238,19 +250,29 @@ namespace lima
     int
     Grabber::setParameterNamed(const std::string& i_param_name, T i_value, int * o_param_id)
     {
+      DEB_MEMBER_FUNCT();
       int the_id = Fg_getParameterIdByName(m_fg, i_param_name.c_str());
       if ( o_param_id )
         *o_param_id = the_id;
-      return setParameter(the_id, i_value);
+      int ret_code = setParameter(the_id, i_value);
+      if ( ret_code ) {
+	DEB_WARNING() << "\tparameter id " << the_id << " indeed correspond to parameter name '" << i_param_name.c_str() << "'"; 
+      }
+      return ret_code;
     }
     template <class T>
     int
     Grabber::getParameterNamed(const std::string& i_param_name, T *o_value, int * o_param_id) const
     {
+      DEB_MEMBER_FUNCT();
       int the_id = Fg_getParameterIdByName(m_fg, i_param_name.c_str());
       if ( o_param_id )
         *o_param_id = the_id;
-      return getParameter(the_id, o_value);
+      int ret_code = getParameter(the_id, o_value);
+      if ( ret_code ) {
+	DEB_WARNING() << "\tparameter id " << the_id <<" indeed correspond to parameter name '" << i_param_name.c_str() << "'";
+      }
+      return ret_code;
     }
 
     

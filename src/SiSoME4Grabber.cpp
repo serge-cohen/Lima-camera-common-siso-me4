@@ -18,6 +18,7 @@
 
 // System headers :
 #include <limits.h>
+#include <execinfo.h>
 
 // Camera SDK headers :
 
@@ -25,6 +26,8 @@
 
 // SiSo-ME4 plugin headers :
 #include "SiSoME4Grabber.h"
+
+// #define siso_me4_assert(ERR) if (sisoError(ERR)) { DEB_WARNING() << "Error code from " << __func__ << "(" << __FILE__ << "." << __LINE__ << ").\n"; }
 
 
 //---------------------------
@@ -97,6 +100,9 @@ lima::siso_me4::Grabber::~Grabber()
     if ( ! sisoError(Fg_FreeGrabber(m_fg)) ) {
       m_fg = NULL;
     }
+    else {
+      DEB_WARNING() << "Unable to free the frame-grabber pointer : " << m_fg;
+    }
   }
 }
 
@@ -107,9 +113,22 @@ lima::siso_me4::Grabber::sisoError(int code) const
   DEB_MEMBER_FUNCT();
   if ( (m_fg) && (FG_OK != code) ) {
     DEB_WARNING() << "Got an error in lima::siso_me4::Grabber : " << code << ", meaning\n\t"
-    << Fg_getErrorDescription(m_fg, code);
+		  << Fg_getErrorDescription(m_fg, code);
+    
+    void *stack_addr[50];
+    std::size_t stack_size;
+    char **stack_symb;
+    stack_size = backtrace(stack_addr, 50);
+    stack_symb = backtrace_symbols(stack_addr, stack_size);
+
+    DEB_WARNING() << "\n\tPrinting stack-trace (gcc) (" << stack_size << " stack frames):";
+    for (std::size_t i=0; stack_size!=i; ++i) {
+      DEB_WARNING() << "\t(" << i << ") : " << stack_symb[i];
+    }
+    free(stack_symb);
+    return code;
   }
-  return code;
+  return (FG_OK != code) ? code : 0; // returning explicit 0 if no error occured.
 }
 
 // Handling the number of frames to collect:
@@ -280,7 +299,7 @@ lima::siso_me4::Grabber::prepareAcq()
     //    std::cout << "About to add to the frame grabber the memory at pointer : " << the_buffer_ptr << " of size " << the_image_size << std::endl;
     int                 the_err_code;
     if ( 0 > (the_err_code = Fg_AddMem(m_fg, the_buffer_ptr, the_image_size, i, m_next_dma_head)))  {
-      sisoError(the_err_code);
+      siso_me4_assert(the_err_code);
       DEB_WARNING() << "Unable to push the subbuffer " << i << " to the DMA memory for frame grabbing.\n"
 		    << "Error code is " << the_err_code;
       //      THROW_HW_ERROR(Error) << "Unable to push the subbuffer " << i << " to the DMA memory for frame grabbing.";
@@ -327,7 +346,7 @@ lima::siso_me4::Grabber::startAcq()
     frameindex_t		the_nr_grab = (0 != m_nb_frames_to_collect) ?  m_nb_frames_to_collect : GRAB_INFINITE;
     //    std::cout << "fg : " << m_fg << "\ndma_index : " << m_dma_index << "\ndma_head : " << m_next_dma_head << std::endl;
 
-    sisoError(Fg_AcquireEx(m_fg, m_dma_index, the_nr_grab, ACQ_BLOCK, m_next_dma_head));
+    siso_me4_assert(Fg_AcquireEx(m_fg, m_dma_index, the_nr_grab, ACQ_BLOCK, m_next_dma_head));
   }
   
 //  // Later on, should handle Software (Software_multi) triggering ...
@@ -505,6 +524,9 @@ lima::siso_me4::Grabber::init()
         delete m_param_table.back();
         m_param_table.pop_back();
       }
+    }
+    else {
+      DEB_WARNING() << "Got an error while trying to free the frame grabber " << m_fg << ", within lima::siso_me4::Grabber::init() (" << __func__ << "(" << __FILE__ << "." << __LINE__ << ")."; 
     }
   }
   if ( m_serial_line ) {
