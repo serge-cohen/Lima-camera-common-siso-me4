@@ -20,6 +20,10 @@
 #include <limits.h>
 #include <execinfo.h>
 
+// Temporary : for ns timing in prepare
+#include <time.h>
+
+
 // Camera SDK headers :
 
 // LImA headers :
@@ -29,6 +33,13 @@
 
 // #define siso_me4_assert(ERR) if (sisoError(ERR)) { DEB_WARNING() << "Error code from " << __func__ << "(" << __FILE__ << "." << __LINE__ << ").\n"; }
 
+static double mus_diff(struct timespec *end, struct timespec *orig);
+
+double
+mus_diff(struct timespec *end, struct timespec *orig)
+{
+  return (double)(end->tv_sec - orig->tv_sec) * 1000000.0 + (double)(end->tv_nsec - orig->tv_nsec)/1000.0;
+}
 
 //---------------------------
 //- utility thread
@@ -189,6 +200,12 @@ lima::siso_me4::Grabber::prepareAcq()
   // Setting the next image index to 0 (since we are starting at 0):
   m_image_index = 0;
 
+  // Taking some dates, at ns "resolution" :
+  clockid_t       my_clock = CLOCK_MONOTONIC_RAW; // but could be CLOCK_PROCESS_CPUTIME_ID...
+  struct timespec d_start, d_alloc_buf_s, d_alloc_buf_d, d_alloc_head_s, d_alloc_head_d, d_buf_to_fg_s, d_buf_to_fg_d;
+
+  clock_gettime(my_clock, &d_start);
+
   // Retrieving the information required to allocate the memory:
   uint32_t				the_width, the_height;
   siso_px_format	the_px_format;
@@ -269,11 +286,13 @@ lima::siso_me4::Grabber::prepareAcq()
   
   DEB_ALWAYS() << "After testing available memory (and continuous acquisition), the mode is " << m_buffer_ringing << " and the number of frame to be allocated is : " << the_alloc_frames;
   
+  clock_gettime(my_clock, &d_alloc_buf_s);
   StdBufferCbMgr& the_buffer = m_buffer_ctrl_obj.getBuffer();
   DEB_TRACE() << "Getting StdBufferCbMgr to allocate the buffers that we want to have";
   the_buffer.allocBuffers(the_alloc_frames, 1, the_frame_dim);
   int				the_frame_mem_size = the_frame_dim.getMemSize();
-  
+  clock_gettime(my_clock, &d_alloc_buf_d);
+
   if ( the_frame_mem_size != the_image_size ) {
     DEB_WARNING() << "You most likely hit an error condition where the a priori computed memory size of a frame ("
     << the_image_size << "B) is different from the memory allocated by lima StdBufferCbMgr ("
@@ -281,6 +300,7 @@ lima::siso_me4::Grabber::prepareAcq()
   }
   
   // Handing the frame buffers to the SDK :
+  clock_gettime(my_clock, &d_alloc_head_s);
   if ( m_next_dma_head ) {
     // As proposed by the SDK, we make sure that we start from an empty queue :
     DEB_ALWAYS() << "Flushing the queue of the framegrabber";
@@ -291,9 +311,12 @@ lima::siso_me4::Grabber::prepareAcq()
   // Preparing the next memory header :
   DEB_TRACE() << "Allocating the DMA memory header";
   m_next_dma_head = Fg_AllocMemHead(m_fg, the_image_size * static_cast<size_t>(the_alloc_frames), static_cast<frameindex_t>(the_alloc_frames));
+
+  clock_gettime(my_clock, &d_alloc_head_d);
   
   // Then queue all the buffers allocated by StdBufferCbMgr
   DEB_TRACE() << "Pushing all the frame buffers to the frame grabber SDK";
+  clock_gettime(my_clock, &d_buf_to_fg_s);
   for ( int i=0; the_alloc_frames != i; ++i) {
     void*		the_buffer_ptr = the_buffer.getFrameBufferPtr(i);
     //    std::cout << "About to add to the frame grabber the memory at pointer : " << the_buffer_ptr << " of size " << the_image_size << std::endl;
@@ -311,7 +334,15 @@ lima::siso_me4::Grabber::prepareAcq()
     }
     DEB_TRACE() << "Queueing the frame buffer " << i << " done (should work).";
   }
-  DEB_ALWAYS() << "Finished queueing " << the_alloc_frames << " frame buffers to andor's SDK3";
+  clock_gettime(my_clock, &d_buf_to_fg_d);
+  DEB_ALWAYS() << "Finished queueing " << the_alloc_frames << " frame buffers to SiSo ME4 frame-grabber.";
+  DEB_ALWAYS() << "Reporting some timeing :\n" 
+	       << "\tFull prepare timing " << mus_diff(&d_buf_to_fg_d, &d_start) << "mus, which is decomposed in :\n" 
+	       << "\t\tSize computation " << mus_diff(&d_alloc_buf_s, &d_start) << "mus\n"
+	       << "\t\tBuffer allocation (lima) " << mus_diff(&d_alloc_buf_d, &d_alloc_buf_s) << "mus\n"
+	       << "\t\tBuffer's head allocation (siso) " << mus_diff(&d_alloc_head_d, &d_alloc_head_s) << "mus\n"
+	       << "\t\tTransferring the buffers to the framgrabber " << mus_diff(&d_buf_to_fg_d, &d_buf_to_fg_s) << "mus\n" 
+	       << "*******************************************************\n";
   // Seems to me that the «0 == m_nb_frames_to_collect» case corresponds to the continuous case
   // So next line is not making sense (and hence commented out) :
   // #warning Setting properly the continuous vs. fixed acquisition mode of the camera
