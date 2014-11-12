@@ -288,7 +288,7 @@ lima::siso_me4::Grabber::prepareAcq()
   
   clock_gettime(my_clock, &d_alloc_buf_s);
   StdBufferCbMgr& the_buffer = m_buffer_ctrl_obj.getBuffer();
-  DEB_TRACE() << "Getting StdBufferCbMgr to allocate the buffers that we want to have";
+  DEB_ALWAYS() << "Getting StdBufferCbMgr to allocate the buffers that we want to have";
   the_buffer.allocBuffers(the_alloc_frames, 1, the_frame_dim);
   int				the_frame_mem_size = the_frame_dim.getMemSize();
   clock_gettime(my_clock, &d_alloc_buf_d);
@@ -336,7 +336,7 @@ lima::siso_me4::Grabber::prepareAcq()
   }
   clock_gettime(my_clock, &d_buf_to_fg_d);
   DEB_ALWAYS() << "Finished queueing " << the_alloc_frames << " frame buffers to SiSo ME4 frame-grabber.";
-  DEB_ALWAYS() << "Reporting some timeing :\n" 
+  DEB_ALWAYS() << "Reporting some timing :\n" 
 	       << "\tFull prepare timing " << mus_diff(&d_buf_to_fg_d, &d_start) << "mus, which is decomposed in :\n" 
 	       << "\t\tSize computation " << mus_diff(&d_alloc_buf_s, &d_start) << "mus\n"
 	       << "\t\tBuffer allocation (lima) " << mus_diff(&d_alloc_buf_d, &d_alloc_buf_s) << "mus\n"
@@ -743,7 +743,24 @@ lima::siso_me4::Grabber::AcqThread::threadFunction()
       //      std::cout << "[siso_me4 AT] fg : " << m_grabber.m_fg << "\ndma_index : " << m_grabber.m_dma_index << "\ndma_head : " << m_grabber.m_next_dma_head << std::endl;
       the_new_frame = Fg_getImageEx(m_grabber.m_fg, SEL_NEXT_IMAGE, 0, m_grabber.m_dma_index, 20, m_grabber.m_next_dma_head);
       if ( 0 == (m_grabber.m_image_index % 50) ) {
-	DEB_ALWAYS() << "[siso_me4 acquisition thread] DONE waiting for buffer index " << m_grabber.m_image_index;
+	struct timespec d_new;
+	double actual_fps=0.0;
+	double from_start_fps=0.0;
+	clock_gettime(CLOCK_MONOTONIC_RAW, &d_new);
+	if ( 0 == m_grabber.m_image_index ) {
+	  m_grabber.m_date_start.tv_sec = d_new.tv_sec;
+	  m_grabber.m_date_start.tv_nsec = d_new.tv_nsec;
+	}
+	if ( 0 != m_grabber.m_image_index ) {
+	  actual_fps = 50.0 / mus_diff(&d_new, &(m_grabber.m_date_last_50)) * 1.0e6;
+	  from_start_fps = static_cast<double>(m_grabber.m_image_index) /
+	    mus_diff(&d_new, &(m_grabber.m_date_start)) * 1.0e6;
+	}
+	DEB_ALWAYS() << "[siso_me4 acquisition thread] DONE waiting for buffer index " << m_grabber.m_image_index 
+		     << ", measured frame rate (on last 50) is " << actual_fps << "f/s, and " 
+		     << from_start_fps << "f/s from sequence's start.";
+	m_grabber.m_date_last_50.tv_sec = d_new.tv_sec;
+	m_grabber.m_date_last_50.tv_nsec = d_new.tv_nsec;
       }
       // Testing if we were asked to stop the acquisition thread :
       // It is best to do that as soon as returning from the SDK, since otherwise it might block some

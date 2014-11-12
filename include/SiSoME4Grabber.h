@@ -34,6 +34,8 @@
 #include <ostream>
 #include <string>
 #include <vector>
+// For actual frame-rate computation based on ns clock :
+#include <time.h>
 
 // LImA headers :
 #include "Debug.h"
@@ -212,6 +214,8 @@ namespace lima
       frameindex_t								m_image_index;					// The index in the current sequence of the next image to retrieve
       bool												m_buffer_ringing;				// Should the buffer be considered as a ring buffer rather than a single use buffer.
       Status											m_status;								// The current status of the camera
+      struct timespec                    m_date_start;   // The date at the starting of the sequence.
+      struct timespec                    m_date_last_50; // The ns clock date at the last 50 frames.
     };
 
     template <class T>
