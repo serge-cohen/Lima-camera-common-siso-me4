@@ -30,7 +30,7 @@
 #include <ostream>
 
 // Some lima stuff :
-#include "HwSerialLine.h"
+#include "lima/HwSerialLine.h"
 
 // Camera SDK headers :
 #include <clser.h> // The serial lines ot the camera

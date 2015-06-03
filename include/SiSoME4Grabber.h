@@ -36,9 +36,9 @@
 #include <vector>
 
 // LImA headers :
-#include "Debug.h"
-#include "HwMaxImageSizeCallback.h"
-#include "HwBufferMgr.h"
+#include "lima/Debug.h"
+#include "lima/HwMaxImageSizeCallback.h"
+#include "lima/HwBufferMgr.h"
 
 // Framegrabber SDK headers :
 #include <fgrab_struct.h>
